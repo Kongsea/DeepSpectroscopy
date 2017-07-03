@@ -9,6 +9,8 @@ import pandas
 from utils import readCSV, normalize
 
 path = 'data'
+CUT_LEFT = 0.2963
+CUT_RIGHT = 0.3069
 
 
 def gen_path_dict(path):
@@ -35,7 +37,8 @@ def get_path_dict(path):
 def read_spa(path):
   with open(path, 'r') as f:
     spa_array = np.loadtxt(f, skiprows=1)
-  spa_intensity = spa_array[:, -1]
+  tmp = spa_array[spa_array[:, 0] >= CUT_LEFT]
+  spa_intensity = tmp[tmp[:, 0] <= CUT_RIGHT][:, -1]
   return normalize(spa_intensity)
   
   
