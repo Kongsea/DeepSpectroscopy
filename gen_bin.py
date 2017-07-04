@@ -2,7 +2,11 @@ import os
 from os import walk
 import csv
 import numpy as np
-import cPickle as pickle
+import sys
+if sys.version_info[0] == 2:
+  import cPickle as pickle
+else:
+  import pickle
 import struct
 import pandas
 
@@ -57,19 +61,21 @@ def gen_label_dict():
   
 if __name__ == '__main__':
   folder_length = [6, 10, 5, 6]
-  label_dict = gen_label_dict()
+  # gen_path_dict(path)
   path_dict = get_path_dict('path_dict.pkl')
+  label_dict = gen_label_dict()
   elements = [l[1:] for l in readCSV('data/elements.csv')[1:]]
-  with open('original.bin', 'wb') as f, open('original.csv', 'wb') as fcsv:
+  with open('data/original.bin', 'wb') as f, open('data/original.csv', 'wb') as fcsv:
     cw = csv.writer(fcsv)
-    cw.writerow(['Class', 'SubNO', 'Category'] + 'Mn Si Ni Cr V Mo Ti Cu Fe'.split())
+    cw.writerow(['No', 'Class', 'SubNO', 'Category'] + 'Mn Si Ni Cr V Mo Ti Cu Fe'.split())
     for cls, subfolders in path_dict.items():
       for subno, filenames in subfolders.items():
         no = sum(folder_length[:cls - 1]) + subno
         label = label_dict[cls][subno]
-        csv_list = [cls, subno, label] + elements[no - 1]
+        csv_list = [no, cls, subno, label] + elements[no - 1]
         for fn in filenames:
           cw.writerow(csv_list)
           spa_array = read_spa(fn)
           f.write(struct.pack('<f', label))
+          np.array(elements[no - 1], np.float32).tofile(f)
           spa_array.astype('float32').tofile(f)
