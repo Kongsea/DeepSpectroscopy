@@ -5,7 +5,7 @@ from gen_bin import read_spa
 
 PLOT = False
 
-path = 'original.bin'
+path = 'data/original.bin'
 length = (10 + 1473) * 4
 with open(path, 'rb') as f:
   f.seek(length * 0)
