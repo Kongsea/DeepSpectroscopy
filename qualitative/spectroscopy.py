@@ -24,7 +24,7 @@ from utils import readCSV
 
 
 class FLAGS():
-  NUM_EPOCHS = 50
+  NUM_EPOCHS = 100
   CHANNEL_NUMBER = 1
   LABEL_NUMBER = 4
   BATCH_SIZE = 32
@@ -33,15 +33,11 @@ class FLAGS():
   NUM_GPU = 1
   NUM_PREPROCESS_THREADS = 12
   NUM_LABEL = 1
-  NUM_SPEC = 57144
+  NUM_SPEC = 1473
   PIXEL_LENGTH = 4
-  VIEW_PATH = 'models'
-  CSV_FILE = 'shuffle.csv'
-  BIN_FILE = 'shuffle.bin'
+  VIEW_PATH = 'qualitative/models'
   MODEL_PATH = None
   SAVE_MODEL = True
-
-XAVIER_INIT = tf.contrib.layers.xavier_initializer(seed=FLAGS.SEED)
 
 
 def accuracy(predictions, labels):
@@ -55,7 +51,7 @@ def init_bin_file(path):
     if not tf.gfile.Exists(f):
       raise ValueError('Failed to find file: ' + f)
   fqb = tf.train.string_input_producer(bin_file_name)
-  record_bytes = (FLAGS.NUM_LABEL + FLAGS.NUM_SPEC) * FLAGS.PIXEL_LENGTH
+  record_bytes = (10 + FLAGS.NUM_SPEC) * FLAGS.PIXEL_LENGTH
   rb = tf.FixedLengthRecordReader(record_bytes=record_bytes)
   return fqb, rb
 
@@ -64,7 +60,7 @@ def get_train_data(fqb, rb):
   key, value = rb.read(fqb)
   record_bytes = tf.decode_raw(value, tf.float32)
   label = tf.cast(tf.slice(record_bytes, [0], [FLAGS.NUM_LABEL]), tf.int64)
-  image = tf.reshape(tf.slice(record_bytes, [FLAGS.NUM_LABEL], [FLAGS.NUM_SPEC]),
+  image = tf.reshape(tf.slice(record_bytes, [10], [FLAGS.NUM_SPEC]),
                      shape=[FLAGS.NUM_SPEC, 1])
   min_queue_examples = FLAGS.BATCH_SIZE * 100
   labels, images = tf.train.batch(
@@ -78,4 +74,6 @@ def get_train_data(fqb, rb):
 
 
 def get_size():
-  return len(readCSV('train.csv')[1:]), len(readCSV('test.csv')[1:]), len(readCSV('val.csv')[1:])
+  return len(readCSV('data/train.csv')[1:]),\
+         len(readCSV('data/test.csv')[1:]),\
+         len(readCSV('data/val.csv')[1:])
