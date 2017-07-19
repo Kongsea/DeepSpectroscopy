@@ -20,17 +20,17 @@ from six.moves import xrange
 import tensorflow as tf
 from spectroscopy import FLAGS
 from spectroscopy import accuracy
-from spectroscopy import get_data, get_size
+from spectroscopy import get_train_data, get_size
 from spectroscopy import init_bin_file
-from tensorflow.contrib.layers import variance_scaling_initializer
+from tensorflow.contrib.layers import variance_scaling_initializer, xavier_initializer
 from tensorflow.contrib.layers import l2_regularizer, apply_regularization
 from tensorflow.contrib.layers import batch_norm
 from utils import readCSV
 
 FLAGS.NUM_EPOCHS = 100
 FLAGS.LABEL_NUMBER = 9
-XAVIER_INIT = tf.contrib.layers.xavier_initializer(seed=FLAGS.SEED)
-RELU_INIT = variance_scaling_initializer()
+XAVIER_INIT = xavier_initializer(seed=FLAGS.SEED)
+# RELU_INIT = variance_scaling_initializer()
 
 Wb = {
     'W1': tf.get_variable('W1', [7, FLAGS.CHANNEL_NUMBER, 32], tf.float32, XAVIER_INIT),
@@ -48,7 +48,7 @@ Wb = {
     'W7': tf.get_variable('W7', [3, 128, 256], tf.float32, XAVIER_INIT),
     'b7': tf.Variable(tf.zeros([256])),
     'W8': tf.get_variable('W8', [3, 256, 256], tf.float32, XAVIER_INIT),
-    'b8': tf.Variable(tf.zeros([256])),   
+    'b8': tf.Variable(tf.zeros([256])),
     'fcw1': tf.get_variable('fcw1', [5 * 256, 32], tf.float32, XAVIER_INIT),
     'fcb1': tf.Variable(tf.zeros([32])),
     'fcw2': tf.get_variable('fcw2', [32, FLAGS.LABEL_NUMBER], tf.float32, XAVIER_INIT),
@@ -76,7 +76,7 @@ def model(data, keep_prob, reuse=None):
     conv = tf.nn.conv1d(pool, Wb['W4'], strides=1, padding='SAME')
     relu = tf.nn.relu(tf.nn.bias_add(conv, Wb['b4']))
     pool = tf.nn.max_pool1d(relu, pool_size=2,
-                            strides=(2), padding='VALID')  
+                            strides=(2), padding='VALID')
   with tf.variable_scope('conv5', reuse=reuse) as scope:
     conv = tf.nn.conv1d(pool, Wb['W5'], strides=1, padding='SAME')
     relu = tf.nn.relu(tf.nn.bias_add(conv, Wb['b5']))
@@ -97,13 +97,13 @@ def model(data, keep_prob, reuse=None):
     relu = tf.nn.relu(tf.nn.bias_add(conv, Wb['b8']))
     pool = tf.nn.max_pool1d(relu, pool_size=2,
                             strides=(2), padding='VALID')
-  with tf.variable_scope('reshape', reuse=reuse):
+  with tf.variable_scope('reshape', reuse=reuse) as scope:
     reshape = tf.reshape(pool, [-1, np.prod(pool.get_shape().as_list()[1:])])
-  with tf.variable_scope('fc1', reuse=reuse):
+  with tf.variable_scope('fc1', reuse=reuse) as scope:
     hidden = tf.nn.relu(tf.matmul(reshape, Wb['fcw1']) + Wb['fcb1'])
-  with tf.variable_scope('dropout', reuse=reuse):
+  with tf.variable_scope('dropout', reuse=reuse) as scope:
     hidden = tf.nn.dropout(hidden, keep_prob, seed=FLAGS.SEED)
-  with tf.variable_scope('fc2', reuse=reuse):
+  with tf.variable_scope('fc2', reuse=reuse) as scope:
     out = tf.matmul(hidden, Wb['fcw2']) + Wb['fcb2']
   return out
 
@@ -137,8 +137,7 @@ def train():
   labels_node = tf.placeholder(tf.float32, shape=(None, FLAGS.LABEL_NUMBER))
   keep_hidden = tf.placeholder(tf.float32)
   logits = model(data_node, keep_hidden)
-  preds = tf.nn.softmax(logits)
-  loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=labels_node))
+  loss = tf.losses.mean_squared_error(labels=labels_node, predictions=logits)
   loss += apply_regularization(l2_regularizer(5e-4), tf.trainable_variables())
 
   batch = tf.Variable(0, trainable=False)
@@ -146,7 +145,7 @@ def train():
                                              train_size, 0.95, staircase=True)
   optimizer = tf.train.MomentumOptimizer(
       learning_rate, 0.9).minimize(loss, global_step=batch)
-  eval_predictions = tf.nn.softmax(model(data_node, keep_hidden, reuse=True))
+  eval_predictions = model(data_node, keep_hidden, reuse=True)
 
   train_label_node, train_data_node = get_train_data(fqbt, rbt)
   val_label_node, val_data_node = get_train_data(fqbv, rbv)
@@ -172,14 +171,14 @@ def train():
           train_data, train_label = sess.run([train_data_node, train_label_node])
           feed_dict = {data_node: train_data,
                        labels_node: train_label, keep_hidden: 0.5}
-          _, l, lr, pred = sess.run(
-              [optimizer, loss, learning_rate, preds], feed_dict=feed_dict)
+          _, l, lr, logit = sess.run(
+              [optimizer, loss, learning_rate, logits], feed_dict=feed_dict)
           if step != 0 and step % TRAIN_FREQUENCY == 0:
             et = time.time() - start_time
             print('Step %d (epoch %.2f), %.1f ms' %
                   (step, float(step) * FLAGS.BATCH_SIZE / train_size, 1000 * et / TRAIN_FREQUENCY))
             print('Minibatch loss: %.3f, learning rate: %.6f' % (l, lr))
-            print('Train accuracy: {:.3f}'.format(accuracy(pred, train_label)))
+            print('Train accuracy: {:.3f}'.format(accuracy(logit, train_label)))
             start_time = time.time()
           if step != 0 and step % VAL_FREQUENCY == 0:
             val_label_total = np.zeros(
