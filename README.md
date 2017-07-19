@@ -10,24 +10,31 @@ We use Laser Induced Breakdown Spectroscopy (LIBS) to illustrate the whole proce
 The spectroscopy files are organized as:
 
 data/1
+
       /1
       /2
       /3
       ...
-    /2
+
+data/2
+
       /1
       /2
       /3
       ...
-    /3
+
+data/3
+
       /1
       /2
       /3
       ...
-    /4
+
+data/4
+
       /1
       /2
       /3
       ...
-      
-There are four classes of samples in all which are corresponding to the subfolder 1, 2, 3 and 4.
+
+There are four classes of samples in all which are corresponding to the subfolders 1, 2, 3 and 4.
