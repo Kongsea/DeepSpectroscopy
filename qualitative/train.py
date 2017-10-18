@@ -220,7 +220,7 @@ def train():
               prediction_total[offset:offset + FLAGS.BATCH_SIZE, :] = predictions
               test_label_total[offset:offset + FLAGS.BATCH_SIZE] = test_label
             acc = accuracy(prediction_total, test_label_total)
-            print('Accuracy of test: {:3.f}'.format(acc))
+            print('Accuracy of test: {:.3f}'.format(acc))
             start_time = time.time()
           if step % SAVE_FREQUENCY == 0 and step != 0:
             if FLAGS.SAVE_MODEL:
