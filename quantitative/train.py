@@ -27,32 +27,32 @@ from tensorflow.contrib.layers import l2_regularizer, apply_regularization
 from tensorflow.contrib.layers import batch_norm
 from utils import readCSV
 
-FLAGS.NUM_EPOCHS = 100
+FLAGS.NUM_EPOCHS = 1000
 FLAGS.LABEL_NUMBER = 9
 XAVIER_INIT = xavier_initializer(seed=FLAGS.SEED)
 # RELU_INIT = variance_scaling_initializer()
 
 Wb = {
     'W1': tf.get_variable('W1', [7, FLAGS.CHANNEL_NUMBER, 32], tf.float32, XAVIER_INIT),
-    'b1': tf.Variable(tf.zeros([32])),
+    'b1': tf.Variable(tf.zeros([32]), name='b1'),
     'W2': tf.get_variable('W2', [5, 32, 32], tf.float32, XAVIER_INIT),
-    'b2': tf.Variable(tf.zeros([32])),
+    'b2': tf.Variable(tf.zeros([32]), name='b2'),
     'W3': tf.get_variable('W3', [3, 32, 64], tf.float32, XAVIER_INIT),
-    'b3': tf.Variable(tf.zeros([64])),
+    'b3': tf.Variable(tf.zeros([64]), name='b3'),
     'W4': tf.get_variable('W4', [3, 64, 64], tf.float32, XAVIER_INIT),
-    'b4': tf.Variable(tf.zeros([64])),
+    'b4': tf.Variable(tf.zeros([64]), name='b4'),
     'W5': tf.get_variable('W5', [3, 64, 128], tf.float32, XAVIER_INIT),
-    'b5': tf.Variable(tf.zeros([128])),
+    'b5': tf.Variable(tf.zeros([128]), name='b5'),
     'W6': tf.get_variable('W6', [3, 128, 128], tf.float32, XAVIER_INIT),
-    'b6': tf.Variable(tf.zeros([128])),
+    'b6': tf.Variable(tf.zeros([128]), name='b6'),
     'W7': tf.get_variable('W7', [3, 128, 256], tf.float32, XAVIER_INIT),
-    'b7': tf.Variable(tf.zeros([256])),
+    'b7': tf.Variable(tf.zeros([256]), name='b7'),
     'W8': tf.get_variable('W8', [3, 256, 256], tf.float32, XAVIER_INIT),
-    'b8': tf.Variable(tf.zeros([256])),
+    'b8': tf.Variable(tf.zeros([256]), name='b8'),
     'fcw1': tf.get_variable('fcw1', [5 * 256, 32], tf.float32, XAVIER_INIT),
-    'fcb1': tf.Variable(tf.zeros([32])),
+    'fcb1': tf.Variable(tf.zeros([32]), name='fcb1'),
     'fcw2': tf.get_variable('fcw2', [32, FLAGS.LABEL_NUMBER], tf.float32, XAVIER_INIT),
-    'fcb2': tf.Variable(tf.zeros([FLAGS.LABEL_NUMBER]))
+    'fcb2': tf.Variable(tf.zeros([FLAGS.LABEL_NUMBER]), name='fcb2')
 }
 
 
@@ -104,7 +104,7 @@ def model(data, keep_prob, reuse=None):
   with tf.variable_scope('dropout', reuse=reuse) as scope:
     hidden = tf.nn.dropout(hidden, keep_prob, seed=FLAGS.SEED)
   with tf.variable_scope('fc2', reuse=reuse) as scope:
-    out = tf.matmul(hidden, Wb['fcw2']) + Wb['fcb2']
+    out = tf.nn.relu(tf.matmul(hidden, Wb['fcw2']) + Wb['fcb2'], name='Output')
   return out
 
 
@@ -125,6 +125,33 @@ def eval_in_batches(data, sess, eval_prediction, eval_data, keep_hidden):
   return predictions
 
 
+def get_lr(step):
+  if step <= 1e4:
+    return 0.01
+  elif step <= 3e4:
+    return 0.001
+  elif step <= 5e4:
+    return 0.0001
+  else:
+    return 0.00001
+
+
+def loss_np(labels, logits):
+  return np.mean(5 * np.sqrt(np.abs(logits - labels) / labels) +
+                 np.sqrt(np.abs(logits - labels)))
+
+
+def loss_tf(labels, logits):
+  return tf.reduce_mean(5 * tf.sqrt(tf.abs(logits - labels) / labels) +
+                        tf.sqrt(tf.abs(logits - labels)))
+
+
+def count_trainable_params(tvs):
+  total_parameters = sum([np.prod(var.get_shape()).value for var in tvs])
+  print('Total training params: {}'.format(total_parameters))
+  return total_parameters
+
+
 def train():
   start_time_first = time.time()
   WORK_DIRECTORY = FLAGS.VIEW_PATH
@@ -133,16 +160,22 @@ def train():
   fqbv, rbv = init_bin_file('data/val.bin')
   fqbe, rbe = init_bin_file('data/test.bin')
 
-  data_node = tf.placeholder(tf.float32, shape=(None, FLAGS.NUM_SPEC, FLAGS.CHANNEL_NUMBER))
+  data_node = tf.placeholder(tf.float32,
+  shape=(None, FLAGS.NUM_SPEC, FLAGS.CHANNEL_NUMBER),
+  name='Input')
   labels_node = tf.placeholder(tf.float32, shape=(None, FLAGS.LABEL_NUMBER))
-  keep_hidden = tf.placeholder(tf.float32)
+  keep_hidden = tf.placeholder(tf.float32, name='keep_hidden')
   logits = model(data_node, keep_hidden)
-  loss = tf.losses.mean_squared_error(labels=labels_node, predictions=logits)
-  loss += apply_regularization(l2_regularizer(5e-4), tf.trainable_variables())
+
+  tvs = [tv for tv in tf.trainable_variables()]
+  count_trainable_params(tvs)
+
+  loss = loss_tf(labels=labels_node, logits=logits)
+  # loss = tf.losses.huber_loss(labels_node, logits)
+  loss += apply_regularization(l2_regularizer(1e-3), tf.trainable_variables())
 
   batch = tf.Variable(0, trainable=False)
-  learning_rate = tf.train.exponential_decay(0.01, batch * FLAGS.BATCH_SIZE,
-                                             train_size, 0.95, staircase=True)
+  learning_rate = tf.placeholder(tf.float32)
   optimizer = tf.train.MomentumOptimizer(
       learning_rate, 0.9).minimize(loss, global_step=batch)
   eval_predictions = model(data_node, keep_hidden, reuse=True)
@@ -153,10 +186,10 @@ def train():
 
   saver = tf.train.Saver(tf.global_variables())
 
-  TRAIN_FREQUENCY = train_size // FLAGS.BATCH_SIZE * 2
+  TRAIN_FREQUENCY = train_size // FLAGS.BATCH_SIZE * 10
   TEST_FREQUENCY = TRAIN_FREQUENCY
   VAL_FREQUENCY = TRAIN_FREQUENCY
-  SAVE_FREQUENCY = 10 * train_size // FLAGS.BATCH_SIZE
+  SAVE_FREQUENCY = 1000 * train_size // FLAGS.BATCH_SIZE
 
   with tf.Session() as sess:
     sess.run(tf.local_variables_initializer())
@@ -169,15 +202,15 @@ def train():
         start_time = time.time()
         for step in xrange(int(FLAGS.NUM_EPOCHS * train_size) // FLAGS.BATCH_SIZE):
           train_data, train_label = sess.run([train_data_node, train_label_node])
-          feed_dict = {data_node: train_data,
-                       labels_node: train_label, keep_hidden: 0.5}
-          _, l, lr, logit = sess.run(
-              [optimizer, loss, learning_rate, logits], feed_dict=feed_dict)
+          feed_dict = {data_node: train_data, labels_node: train_label,
+                       keep_hidden: 0.5, learning_rate: get_lr(step)}
+          _, l, logit = sess.run(
+              [optimizer, loss, logits], feed_dict=feed_dict)
           if step != 0 and step % TRAIN_FREQUENCY == 0:
             et = time.time() - start_time
             print('Step %d (epoch %.2f), %.1f ms' %
                   (step, float(step) * FLAGS.BATCH_SIZE / train_size, 1000 * et / TRAIN_FREQUENCY))
-            print('Minibatch loss: %.3f, learning rate: %.6f' % (l, lr))
+            print('Minibatch loss: %.3f' % l)
             print('Train accuracy: {:.3f}'.format(accuracy(logit, train_label)))
             start_time = time.time()
           if step != 0 and step % VAL_FREQUENCY == 0:

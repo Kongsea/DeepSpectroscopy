@@ -28,32 +28,32 @@ from tensorflow.contrib.layers import batch_norm
 
 from utils import readCSV
 
-FLAGS.NUM_EPOCHS = 100
+FLAGS.NUM_EPOCHS = 200
 FLAGS.LABEL_NUMBER = 4
 XAVIER_INIT = tf.contrib.layers.xavier_initializer(seed=FLAGS.SEED)
 RELU_INIT = variance_scaling_initializer()
 
 Wb = {
     'W1': tf.get_variable('W1', [7, FLAGS.CHANNEL_NUMBER, 32], tf.float32, XAVIER_INIT),
-    'b1': tf.Variable(tf.zeros([32])),
+    'b1': tf.Variable(tf.zeros([32]), name='b1'),
     'W2': tf.get_variable('W2', [5, 32, 32], tf.float32, XAVIER_INIT),
-    'b2': tf.Variable(tf.zeros([32])),
+    'b2': tf.Variable(tf.zeros([32]), name='b2'),
     'W3': tf.get_variable('W3', [3, 32, 64], tf.float32, XAVIER_INIT),
-    'b3': tf.Variable(tf.zeros([64])),
+    'b3': tf.Variable(tf.zeros([64]), name='b3'),
     'W4': tf.get_variable('W4', [3, 64, 64], tf.float32, XAVIER_INIT),
-    'b4': tf.Variable(tf.zeros([64])),
+    'b4': tf.Variable(tf.zeros([64]), name='b4'),
     'W5': tf.get_variable('W5', [3, 64, 128], tf.float32, XAVIER_INIT),
-    'b5': tf.Variable(tf.zeros([128])),
+    'b5': tf.Variable(tf.zeros([128]), name='b5'),
     'W6': tf.get_variable('W6', [3, 128, 128], tf.float32, XAVIER_INIT),
-    'b6': tf.Variable(tf.zeros([128])),
+    'b6': tf.Variable(tf.zeros([128]), name='b6'),
     'W7': tf.get_variable('W7', [3, 128, 256], tf.float32, XAVIER_INIT),
-    'b7': tf.Variable(tf.zeros([256])),
+    'b7': tf.Variable(tf.zeros([256]), name='b7'),
     'W8': tf.get_variable('W8', [3, 256, 256], tf.float32, XAVIER_INIT),
-    'b8': tf.Variable(tf.zeros([256])),   
+    'b8': tf.Variable(tf.zeros([256]), name='b8'),
     'fcw1': tf.get_variable('fcw1', [5 * 256, 32], tf.float32, XAVIER_INIT),
-    'fcb1': tf.Variable(tf.zeros([32])),
+    'fcb1': tf.Variable(tf.zeros([32]), name='fcb1'),
     'fcw2': tf.get_variable('fcw2', [32, FLAGS.LABEL_NUMBER], tf.float32, XAVIER_INIT),
-    'fcb2': tf.Variable(tf.zeros([FLAGS.LABEL_NUMBER]))
+    'fcb2': tf.Variable(tf.zeros([FLAGS.LABEL_NUMBER]), name='fcb2')
 }
 
 
@@ -77,7 +77,7 @@ def model(data, keep_prob, reuse=None):
     conv = tf.nn.conv1d(pool, Wb['W4'], strides=1, padding='SAME')
     relu = tf.nn.relu(tf.nn.bias_add(conv, Wb['b4']))
     pool = tf.nn.max_pool1d(relu, pool_size=2,
-                            strides=(2), padding='VALID')  
+                            strides=(2), padding='VALID')
   with tf.variable_scope('conv5', reuse=reuse) as scope:
     conv = tf.nn.conv1d(pool, Wb['W5'], strides=1, padding='SAME')
     relu = tf.nn.relu(tf.nn.bias_add(conv, Wb['b5']))
@@ -126,6 +126,12 @@ def eval_in_batches(data, sess, eval_prediction, eval_data, keep_hidden):
   return predictions
 
 
+def count_trainable_params(tvs):
+  total_parameters = sum([np.prod(var.get_shape()).value for var in tvs])
+  print('Total training params: {}'.format(total_parameters))
+  return total_parameters
+
+
 def train():
   start_time_first = time.time()
   WORK_DIRECTORY = FLAGS.VIEW_PATH
@@ -138,7 +144,11 @@ def train():
   labels_node = tf.placeholder(tf.int64, shape=(None, FLAGS.LABEL_NUMBER))
   keep_hidden = tf.placeholder(tf.float32)
   logits = model(data_node, keep_hidden)
-  preds = tf.nn.softmax(logits)
+  preds = tf.nn.softmax(logits, name='Output')
+
+  tvs = [tv for tv in tf.trainable_variables()]
+  count_trainable_params(tvs)
+
   loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=labels_node))
   loss += apply_regularization(l2_regularizer(5e-4), tf.trainable_variables())
 
