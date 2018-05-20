@@ -1,3 +1,14 @@
 .ipynb_checkpoints
 *.pyc
+log/*
 .vscode/
+20130325*
+*.zip
+*.pptx
+*.docx
+*.xlsx
+*.jpg
+*.pdf
+*.pkl
+*models
+data/*
